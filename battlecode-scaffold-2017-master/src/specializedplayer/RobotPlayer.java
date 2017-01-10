@@ -11,7 +11,7 @@ import battlecode.common.RobotInfo;
 import battlecode.common.RobotType;
 import battlecode.common.Team;
 
-public strictfp class SoldierPlayer {
+public strictfp class RobotPlayer {
     static RobotController rc;
 
     /**
@@ -23,7 +23,7 @@ public strictfp class SoldierPlayer {
 
         // This is the RobotController object. You use it to perform actions from this robot,
         // and to get information on its current status.
-        SoldierPlayer.rc = rc;
+        RobotPlayer.rc = rc;
 
         // Here, we've separated the controls into a different method for each RobotType.
         // You can add the missing ones or rewrite this into your own control structure.
