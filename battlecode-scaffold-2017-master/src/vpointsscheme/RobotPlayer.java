@@ -1,5 +1,4 @@
-package specializedplayer;
-
+package vpointsscheme;
 import battlecode.common.BulletInfo;
 import battlecode.common.Clock;
 import battlecode.common.Direction;
@@ -10,6 +9,7 @@ import battlecode.common.RobotController;
 import battlecode.common.RobotInfo;
 import battlecode.common.RobotType;
 import battlecode.common.Team;
+import battlecode.common.TreeInfo;
 
 public strictfp class RobotPlayer {
     static RobotController rc;
@@ -54,12 +54,13 @@ public strictfp class RobotPlayer {
 
                 // Generate a random direction
                 Direction dir = randomDirection();
-                if (rc.getTeamVictoryPoints() > 107){
-                	rc.donate(20);
+                
+                //Donate Bullets for Victory Points if possible, randomly
+                if (rc.getTeamBullets() > 150 && Math.random() < .3){
+                	rc.donate(50);
                 }
-
                 // Randomly attempt to build a gardener in this direction
-                if (rc.canHireGardener(dir) && Math.random() < .2) {
+                if (rc.getTeamBullets() > 130 && Math.random() < .3) {
                     rc.hireGardener(dir);
                 }
 
@@ -67,9 +68,9 @@ public strictfp class RobotPlayer {
                 tryMove(randomDirection());
 
                 // Broadcast archon's location for other robots on the team to know
-                // MapLocation myLocation = rc.getLocation();
-                // rc.broadcast(0,(int)myLocation.x);
-                // rc.broadcast(1,(int)myLocation.y);
+                /*MapLocation myLocation = rc.getLocation();
+                rc.broadcast(0,(int)myLocation.x);
+                rc.broadcast(1,(int)myLocation.y);*/
 
                 // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
                 Clock.yield();
@@ -97,17 +98,25 @@ public strictfp class RobotPlayer {
 
                 // Generate a random direction
                 Direction dir = randomDirection();
-
-                // Randomly attempt to build a soldier or tree in this direction
-                if (rc.canBuildRobot(RobotType.SOLDIER, dir)&&Math.random()<.2) {
-                    rc.buildRobot(RobotType.SOLDIER, dir);}
-                else if (rc.canBuildRobot(RobotType.SOLDIER, dir) && Math.random() < .4){
+                
+                // If Possible to water trees, water them
+                if (rc.canWater()){
+                	TreeInfo[] trees = rc.senseNearbyTrees();
+                	for (int i=0; i < trees.length; i++) {
+                		int treeID = trees[i].ID;
+                		if (rc.canWater(treeID)){
+                			System.out.println("Watering Tree");
+                			rc.water(treeID);
+                		}
+                	}
+                	
+                }
+                
+                // Randomly attempt to build a tree in this direction
+                if (rc.canPlantTree(dir) && Math.random() < .15){
                 	rc.plantTree(dir);
                 }
-//              else if (rc.canBuildRobot(RobotType.LUMBERJACK, dir) && Math.random() < .01 && rc.isBuildReady()) {
-//                    rc.buildRobot(RobotType.LUMBERJACK, dir);
-//              }
-
+                
                 // Move randomly
                 tryMove(randomDirection());
 
@@ -142,17 +151,10 @@ public strictfp class RobotPlayer {
                         // ...Then fire a bullet in the direction of the enemy.
                         rc.fireSingleShot(rc.getLocation().directionTo(robots[0].location));
                     }
-                    else if (Math.random() < 0.5) {
-                    	MapLocation myLocation1 = rc.getLocation();
-                        MapLocation enemyLocation = robots[0].getLocation();
-                        Direction toEnemy = myLocation1.directionTo(enemyLocation);
-                        tryMove(toEnemy);
-                    }
-                    else {
-                    	tryMove(randomDirection());
-                    }
                 }
-                else {tryMove(randomDirection());}
+
+                // Move randomly
+                tryMove(randomDirection());
 
                 // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
                 Clock.yield();
