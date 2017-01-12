@@ -56,11 +56,11 @@ public strictfp class RobotPlayer {
                 Direction dir = randomDirection();
                 
                 //Donate Bullets for Victory Points if possible, randomly
-                if (rc.getTeamBullets() > 150 && Math.random() < .3){
-                	rc.donate(50);
+                if (rc.getTeamBullets() >= 200 && Math.random() < .5){
+                	rc.donate(100);
                 }
                 // Randomly attempt to build a gardener in this direction
-                if (rc.getTeamBullets() > 130 && Math.random() < .3) {
+                if (rc.getTeamBullets() >= 150 && Math.random() < .05) {
                     rc.hireGardener(dir);
                 }
 
@@ -100,22 +100,31 @@ public strictfp class RobotPlayer {
                 Direction dir = randomDirection();
                 
                 // If Possible to water trees, water them
-                if (rc.canWater()){
+                if (rc.canWater() || rc.canShake()){
                 	TreeInfo[] trees = rc.senseNearbyTrees();
                 	for (int i=0; i < trees.length; i++) {
                 		int treeID = trees[i].ID;
+                		// If possible to shake trees, shake
+                        if (rc.canShake(treeID)){
+                        	rc.shake(treeID);
+                        }
                 		if (rc.canWater(treeID)){
                 			System.out.println("Watering Tree");
                 			rc.water(treeID);
                 		}
-                	}
-                	
+                	}	
+                }
+                
+                if (rc.canBuildRobot(RobotType.SOLDIER, dir) && rc.getTeamBullets() > 150 && Math.random() < .05){
+                	rc.buildRobot(RobotType.SOLDIER, dir);
                 }
                 
                 // Randomly attempt to build a tree in this direction
-                if (rc.canPlantTree(dir) && Math.random() < .15){
+                if (rc.canPlantTree(dir) && rc.getTeamBullets() > 150 && Math.random() < .05){
                 	rc.plantTree(dir);
                 }
+                
+                
                 
                 // Move randomly
                 tryMove(randomDirection());
@@ -133,6 +142,7 @@ public strictfp class RobotPlayer {
     static void runSoldier() throws GameActionException {
         System.out.println("I'm an soldier!");
         Team enemy = rc.getTeam().opponent();
+        Direction prevDir = randomDirection();
 
         // The code you want your robot to perform every round should be in this loop
         while (true) {
@@ -148,10 +158,15 @@ public strictfp class RobotPlayer {
                 if (robots.length > 0) {
                     // And we have enough bullets, and haven't attacked yet this turn...
                     if (rc.canFireSingleShot()) {
-                        // ...Then fire a bullet in the direction of the enemy.
+                        // ...Then fire a bullet in the direction of the enemy and chase it
                         rc.fireSingleShot(rc.getLocation().directionTo(robots[0].location));
+                        tryMove(rc.getLocation().directionTo(robots[0].location));
+                        prevDir = rc.getLocation().directionTo(robots[0].location).rotateLeftRads(90);
                     }
                 }
+                
+                // If there aren't, look for bullets to dodge
+                dodgeBullets(prevDir);
 
                 // Move randomly
                 tryMove(randomDirection());
@@ -169,6 +184,7 @@ public strictfp class RobotPlayer {
     static void runLumberjack() throws GameActionException {
         System.out.println("I'm a lumberjack!");
         Team enemy = rc.getTeam().opponent();
+        Direction prevDir = randomDirection();
 
         // The code you want your robot to perform every round should be in this loop
         while (true) {
@@ -179,26 +195,30 @@ public strictfp class RobotPlayer {
                 // See if there are any enemy robots within striking range (distance 1 from lumberjack's radius)
                 RobotInfo[] robots = rc.senseNearbyRobots(RobotType.LUMBERJACK.bodyRadius+GameConstants.LUMBERJACK_STRIKE_RADIUS, enemy);
 
-                if(robots.length > 0 && !rc.hasAttacked()) {
+                if (robots.length > 0 && !rc.hasAttacked()) {
                     // Use strike() to hit all nearby robots!
                     rc.strike();
                 } else {
                     // No close robots, so search for robots within sight radius
                     robots = rc.senseNearbyRobots(-1,enemy);
-
+                    
+                    dodgeBullets(prevDir);
+                    
                     // If there is a robot, move towards it
-                    if(robots.length > 0) {
+                    if (robots.length > 0) {
                         MapLocation myLocation = rc.getLocation();
                         MapLocation enemyLocation = robots[0].getLocation();
                         Direction toEnemy = myLocation.directionTo(enemyLocation);
-
                         tryMove(toEnemy);
+                        prevDir = toEnemy;
                     } else {
                         // Move Randomly
-                        tryMove(randomDirection());
+                    	Direction dir = randomDirection();
+                        tryMove(dir);
+                        prevDir = dir;
                     }
                 }
-
+                
                 // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
                 Clock.yield();
 
@@ -207,6 +227,27 @@ public strictfp class RobotPlayer {
                 e.printStackTrace();
             }
         }
+    }
+    
+    static void dodgeBullets(Direction prevDir){
+    	
+    	try {
+			// If there is a bullet coming towards me, avoid it
+			BulletInfo[] bulletsSensed = rc.senseNearbyBullets();
+			if (bulletsSensed.length > 0) {
+				for(int i=0; i < bulletsSensed.length; i++){
+					if(willCollideWithMe(bulletsSensed[i])){
+						tryMove(prevDir);
+					}
+				}
+				Direction dir = randomDirection();
+				tryMove(dir);
+				prevDir = dir;
+			}
+		} catch (GameActionException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
     }
 
     /**
