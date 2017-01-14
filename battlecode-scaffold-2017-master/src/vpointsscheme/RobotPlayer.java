@@ -1,32 +1,22 @@
 package vpointsscheme;
-import battlecode.common.BulletInfo;
-import battlecode.common.Clock;
-import battlecode.common.Direction;
-import battlecode.common.GameActionException;
-import battlecode.common.GameConstants;
-import battlecode.common.MapLocation;
-import battlecode.common.RobotController;
-import battlecode.common.RobotInfo;
-import battlecode.common.RobotType;
-import battlecode.common.Team;
-import battlecode.common.TreeInfo;
+import battlecode.common.*;
 
+import java.util.Random;
+
+/**
+ * Created by Max_Inspiron15 on 1/10/2017.
+ */
 public strictfp class RobotPlayer {
     static RobotController rc;
-
-    /**
-     * run() is the method that is called when a robot is instantiated in the Battlecode world.
-     * If this method returns, the robot dies!
-    **/
+    static Direction[] dirList = new Direction[4];
+    static Direction goingDir;
+    static Random rand;
     @SuppressWarnings("unused")
     public static void run(RobotController rc) throws GameActionException {
-
-        // This is the RobotController object. You use it to perform actions from this robot,
-        // and to get information on its current status.
         RobotPlayer.rc = rc;
-
-        // Here, we've separated the controls into a different method for each RobotType.
-        // You can add the missing ones or rewrite this into your own control structure.
+        initDirList();
+        rand = new Random(rc.getID());
+        goingDir = randomDir();
         switch (rc.getType()) {
             case ARCHON:
                 runArchon();
@@ -41,304 +31,97 @@ public strictfp class RobotPlayer {
                 runLumberjack();
                 break;
         }
-	}
-
-    static void runArchon() throws GameActionException {
-        System.out.println("I'm an archon!");
-
-        // The code you want your robot to perform every round should be in this loop
-        while (true) {
-
-            // Try/catch blocks stop unhandled exceptions, which cause your robot to explode
-            try {
-
-                // Generate a random direction
-                Direction dir = randomDirection();
-                
-                //Donate Bullets for Victory Points if possible, randomly
-                if (rc.getTeamBullets() >= 200 && Math.random() < .5){
-                	rc.donate(100);
-                }
-                // Randomly attempt to build a gardener in this direction
-                if (rc.getTeamBullets() >= 150 && Math.random() < .05) {
-                    rc.hireGardener(dir);
-                }
-
-                // Move randomly
-                tryMove(randomDirection());
-
-                // Broadcast archon's location for other robots on the team to know
-                /*MapLocation myLocation = rc.getLocation();
-                rc.broadcast(0,(int)myLocation.x);
-                rc.broadcast(1,(int)myLocation.y);*/
-
-                // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
+    }
+    public static Direction randomDir(){
+        return dirList[rand.nextInt(4)];
+    }
+    public static void initDirList(){
+        for(int i=0;i<4;i++){
+            float radians = (float)(-Math.PI + 2*Math.PI*((float)i)/4);
+            dirList[i]=new Direction(radians);
+            System.out.println("made new direction "+dirList[i]);
+        }
+    }
+    public static void runArchon() {
+        while(true){
+            try{
+                //TODO count gardeners
+                //try to build gardeners
+                //can you build a gardener?
+                tryToBuild(RobotType.GARDENER,RobotType.GARDENER.bulletCost);
+                //System.out.println("bytecode usage is "+Clock.getBytecodeNum());
                 Clock.yield();
-
-            } catch (Exception e) {
-                System.out.println("Archon Exception");
+            }catch(Exception e){
                 e.printStackTrace();
             }
         }
     }
-
-	static void runGardener() throws GameActionException {
-        System.out.println("I'm a gardener!");
-
-        // The code you want your robot to perform every round should be in this loop
-        while (true) {
-
-            // Try/catch blocks stop unhandled exceptions, which cause your robot to explode
-            try {
-
-                // Listen for home archon's location
-                int xPos = rc.readBroadcast(0);
-                int yPos = rc.readBroadcast(1);
-                MapLocation archonLoc = new MapLocation(xPos,yPos);
-
-                // Generate a random direction
-                Direction dir = randomDirection();
-                
-                // If Possible to water trees, water them
-                if (rc.canWater() || rc.canShake()){
-                	TreeInfo[] trees = rc.senseNearbyTrees();
-                	for (int i=0; i < trees.length; i++) {
-                		int treeID = trees[i].ID;
-                		// If possible to shake trees, shake
-                        if (rc.canShake(treeID)){
-                        	rc.shake(treeID);
-                        }
-                		if (rc.canWater(treeID)){
-                			System.out.println("Watering Tree");
-                			rc.water(treeID);
-                		}
-                	}	
+    public static void runGardener(){
+        while(true){
+            try{
+                //first try to plant trees
+                tryToPlant();
+                //now try to water trees
+                tryToWater();
+                //move around
+                if(rc.canMove(goingDir)){
+                    rc.move(goingDir);
+                }else{
+                    goingDir = randomDir();
                 }
-                
-                if (rc.canBuildRobot(RobotType.SOLDIER, dir) && rc.getTeamBullets() > 150 && Math.random() < .05){
-                	rc.buildRobot(RobotType.SOLDIER, dir);
-                }
-                
-                // Randomly attempt to build a tree in this direction
-                if (rc.canPlantTree(dir) && rc.getTeamBullets() > 150 && Math.random() < .05){
-                	rc.plantTree(dir);
-                }
-                
-                
-                
-                // Move randomly
-                tryMove(randomDirection());
-
-                // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
                 Clock.yield();
-
-            } catch (Exception e) {
-                System.out.println("Gardener Exception");
+            }catch(Exception e){
                 e.printStackTrace();
             }
         }
     }
+    public static void runSoldier(){
 
-    static void runSoldier() throws GameActionException {
-        System.out.println("I'm an soldier!");
-        Team enemy = rc.getTeam().opponent();
-        Direction prevDir = randomDirection();
+    }
+    public static void runLumberjack(){
 
-        // The code you want your robot to perform every round should be in this loop
-        while (true) {
-
-            // Try/catch blocks stop unhandled exceptions, which cause your robot to explode
-            try {
-                MapLocation myLocation = rc.getLocation();
-
-                // See if there are any nearby enemy robots
-                RobotInfo[] robots = rc.senseNearbyRobots(-1, enemy);
-
-                // If there are some...
-                if (robots.length > 0) {
-                    // And we have enough bullets, and haven't attacked yet this turn...
-                    if (rc.canFireSingleShot()) {
-                        // ...Then fire a bullet in the direction of the enemy and chase it
-                        rc.fireSingleShot(rc.getLocation().directionTo(robots[0].location));
-                        tryMove(rc.getLocation().directionTo(robots[0].location));
-                        prevDir = rc.getLocation().directionTo(robots[0].location).rotateLeftRads(90);
+    }
+    public static void tryToWater() throws GameActionException{
+        if(rc.canWater()) {
+            TreeInfo[] nearbyTrees = rc.senseNearbyTrees();
+            for (int i = 0; i < nearbyTrees.length; i++)
+                if(nearbyTrees[i].getHealth()<GameConstants.BULLET_TREE_MAX_HEALTH-GameConstants.WATER_HEALTH_REGEN_RATE) {
+                    if (rc.canWater(nearbyTrees[i].getID())) {
+                        rc.water(nearbyTrees[i].getID());
+                        break;
                     }
                 }
-                
-                // If there aren't, look for bullets to dodge
-                dodgeBullets(prevDir);
-
-                // Move randomly
-                tryMove(randomDirection());
-
-                // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
-                Clock.yield();
-
-            } catch (Exception e) {
-                System.out.println("Soldier Exception");
-                e.printStackTrace();
+        }
+    }
+    public static void tryToBuild(RobotType type, int moneyNeeded) throws GameActionException{
+        //try to build gardeners
+        //can you build a gardener?
+        if(rc.getTeamBullets()>moneyNeeded) {//have enough bullets. assuming we haven't built already.
+            for (int i = 0; i < 4; i++) {
+                if(rc.canBuildRobot(type,dirList[i])){
+                    rc.buildRobot(type,dirList[i]);
+                    break;
+                }
             }
         }
     }
-
-    static void runLumberjack() throws GameActionException {
-        System.out.println("I'm a lumberjack!");
-        Team enemy = rc.getTeam().opponent();
-        Direction prevDir = randomDirection();
-
-        // The code you want your robot to perform every round should be in this loop
-        while (true) {
-
-            // Try/catch blocks stop unhandled exceptions, which cause your robot to explode
-            try {
-
-                // See if there are any enemy robots within striking range (distance 1 from lumberjack's radius)
-                RobotInfo[] robots = rc.senseNearbyRobots(RobotType.LUMBERJACK.bodyRadius+GameConstants.LUMBERJACK_STRIKE_RADIUS, enemy);
-
-                if (robots.length > 0 && !rc.hasAttacked()) {
-                    // Use strike() to hit all nearby robots!
-                    rc.strike();
-                } else {
-                    // No close robots, so search for robots within sight radius
-                    robots = rc.senseNearbyRobots(-1,enemy);
-                    
-                    dodgeBullets(prevDir);
-                    
-                    // If there is a robot, move towards it
-                    if (robots.length > 0) {
-                        MapLocation myLocation = rc.getLocation();
-                        MapLocation enemyLocation = robots[0].getLocation();
-                        Direction toEnemy = myLocation.directionTo(enemyLocation);
-                        tryMove(toEnemy);
-                        prevDir = toEnemy;
-                    } else {
-                        // Move Randomly
-                    	Direction dir = randomDirection();
-                        tryMove(dir);
-                        prevDir = dir;
+    public static void tryToPlant() throws GameActionException{
+        //try to build gardeners
+        //can you build a gardener?
+        if(rc.getTeamBullets()>GameConstants.BULLET_TREE_COST) {//have enough bullets. assuming we haven't built already.
+            for (int i = 0; i < 4; i++) {
+                //only plant trees on a sub-grid
+                MapLocation p = rc.getLocation().add(dirList[i],GameConstants.GENERAL_SPAWN_OFFSET+GameConstants.BULLET_TREE_RADIUS+rc.getType().bodyRadius);
+                if(modGood(p.x,6,0.2f)&&modGood(p.y,6,0.2f)) {
+                    if (rc.canPlantTree(dirList[i])) {
+                        rc.plantTree(dirList[i]);
+                        break;
                     }
                 }
-                
-                // Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
-                Clock.yield();
-
-            } catch (Exception e) {
-                System.out.println("Lumberjack Exception");
-                e.printStackTrace();
             }
         }
     }
-    
-    static void dodgeBullets(Direction prevDir){
-    	
-    	try {
-			// If there is a bullet coming towards me, avoid it
-			BulletInfo[] bulletsSensed = rc.senseNearbyBullets();
-			if (bulletsSensed.length > 0) {
-				for(int i=0; i < bulletsSensed.length; i++){
-					if(willCollideWithMe(bulletsSensed[i])){
-						tryMove(prevDir);
-					}
-				}
-				Direction dir = randomDirection();
-				tryMove(dir);
-				prevDir = dir;
-			}
-		} catch (GameActionException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-    }
-
-    /**
-     * Returns a random Direction
-     * @return a random Direction
-     */
-    static Direction randomDirection() {
-        return new Direction((float)Math.random() * 2 * (float)Math.PI);
-    }
-
-    /**
-     * Attempts to move in a given direction, while avoiding small obstacles directly in the path.
-     *
-     * @param dir The intended direction of movement
-     * @return true if a move was performed
-     * @throws GameActionException
-     */
-    static boolean tryMove(Direction dir) throws GameActionException {
-        return tryMove(dir,20,3);
-    }
-
-    /**
-     * Attempts to move in a given direction, while avoiding small obstacles direction in the path.
-     *
-     * @param dir The intended direction of movement
-     * @param degreeOffset Spacing between checked directions (degrees)
-     * @param checksPerSide Number of extra directions checked on each side, if intended direction was unavailable
-     * @return true if a move was performed
-     * @throws GameActionException
-     */
-    static boolean tryMove(Direction dir, float degreeOffset, int checksPerSide) throws GameActionException {
-
-        // First, try intended direction
-        if (rc.canMove(dir)) {
-            rc.move(dir);
-            return true;
-        }
-
-        // Now try a bunch of similar angles
-        boolean moved = false;
-        int currentCheck = 1;
-
-        while(currentCheck<=checksPerSide) {
-            // Try the offset of the left side
-            if(rc.canMove(dir.rotateLeftDegrees(degreeOffset*currentCheck))) {
-                rc.move(dir.rotateLeftDegrees(degreeOffset*currentCheck));
-                return true;
-            }
-            // Try the offset on the right side
-            if(rc.canMove(dir.rotateRightDegrees(degreeOffset*currentCheck))) {
-                rc.move(dir.rotateRightDegrees(degreeOffset*currentCheck));
-                return true;
-            }
-            // No move performed, try slightly further
-            currentCheck++;
-        }
-
-        // A move never happened, so return false.
-        return false;
-    }
-
-    /**
-     * A slightly more complicated example function, this returns true if the given bullet is on a collision
-     * course with the current robot. Doesn't take into account objects between the bullet and this robot.
-     *
-     * @param bullet The bullet in question
-     * @return True if the line of the bullet's path intersects with this robot's current position.
-     */
-    static boolean willCollideWithMe(BulletInfo bullet) {
-        MapLocation myLocation = rc.getLocation();
-
-        // Get relevant bullet information
-        Direction propagationDirection = bullet.dir;
-        MapLocation bulletLocation = bullet.location;
-
-        // Calculate bullet relations to this robot
-        Direction directionToRobot = bulletLocation.directionTo(myLocation);
-        float distToRobot = bulletLocation.distanceTo(myLocation);
-        float theta = propagationDirection.radiansBetween(directionToRobot);
-
-        // If theta > 90 degrees, then the bullet is traveling away from us and we can break early
-        if (Math.abs(theta) > Math.PI/2) {
-            return false;
-        }
-
-        // distToRobot is our hypotenuse, theta is our angle, and we want to know this length of the opposite leg.
-        // This is the distance of a line that goes from myLocation and intersects perpendicularly with propagationDirection.
-        // This corresponds to the smallest radius circle centered at our location that would intersect with the
-        // line that is the path of the bullet.
-        float perpendicularDist = (float)Math.abs(distToRobot * Math.sin(theta)); // soh cah toa :)
-
-        return (perpendicularDist <= rc.getType().bodyRadius);
+    public static boolean modGood(float number,float spacing, float fraction){
+        return (number%spacing)<spacing*fraction;
     }
 }
