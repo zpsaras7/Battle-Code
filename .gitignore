@@ -1,9 +1,9 @@
 *.gradle
-/.gradle/
-/build/
-/matches/
-*.project
+gradle/
+build/
+matches/
+.project
 *.class
-*.settings
+.settings/
 *.DS_STORE
 *.classpath
