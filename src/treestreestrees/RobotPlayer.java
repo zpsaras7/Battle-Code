@@ -273,6 +273,9 @@ public strictfp class RobotPlayer {
 						}
 						if(type.equals("LUMBERJACK") && tryToBuild(RobotType.LUMBERJACK)){
 							amntToWaitFor = Short.MAX_VALUE;
+<<<<<<< HEAD
+>>>>>>> 03c18dbb70b6bc9b9b5c844743b7ce24be4f2574
+=======
 >>>>>>> 03c18dbb70b6bc9b9b5c844743b7ce24be4f2574
 						}
 					} catch(GameActionException e){
