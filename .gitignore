@@ -4,3 +4,4 @@ matches/
 .settings/
 *.DS_STORE
 *.classpath
+/.gradle/
