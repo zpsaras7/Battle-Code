@@ -45,8 +45,8 @@ public strictfp class RobotPlayer {
 		}
 	}
 	public static void runArchon() {
-		int numGardenersCreated = 0;
-		int minNumGardeners = 10;
+		byte numGardenersCreated = 0;
+		byte minNumGardeners = 10;
 		while(true){
 			float currentBank = rc.getTeamBullets();
 			try{
@@ -58,8 +58,9 @@ public strictfp class RobotPlayer {
 				if(rc.isBuildReady()) {
 					byte[] gardenerStateBytes = toBytes(rc.readBroadcast(CHANNEL_G));
 					if(numGardenersCreated < minNumGardeners || 
-							gardenerStateBytes[3] < minNumGardeners) {
-						if(tryToBuild(RobotType.GARDENER)) {
+							gardenerStateBytes[3] < minNumGardeners || 
+							Math.random() < .15) { //added additional slower creation of gardeners as game may progress
+						if(tryToBuild(RobotType.GARDENER)) { //builds robot if it can
 							numGardenersCreated++;
 							gardenerStateBytes[3] =  (byte) (gardenerStateBytes[3] + 1);
 							rc.broadcast(CHANNEL_G, toInt(gardenerStateBytes));
@@ -176,6 +177,14 @@ public strictfp class RobotPlayer {
 	}
 	public static void runLumberjack(){
 
+	}
+	
+	public static void runScout() {
+		while(true) {
+			int 
+			
+			Clock.yield();
+		}
 	}
 
 	/**
