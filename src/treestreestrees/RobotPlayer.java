@@ -138,22 +138,35 @@ public strictfp class RobotPlayer {
 		}
 		else {
 			int numTreesPlanted = 0;
+			RobotType typeToMake = null;
 			while(true){
 				if(amntToWaitFor == Short.MAX_VALUE) {
-					amntToWaitFor = (short) GameConstants.BULLET_TREE_COST;
+					amntToWaitFor = (short) RobotType.SOLDIER.bulletCost;
 					double r = Math.random();
-					if(r < .33)
-						amntToWaitFor = (short) RobotType.SOLDIER.bulletCost;
+					if(r < .30){
+						typeToMake = RobotType.SOLDIER;
+					}
+					else if (r>.3 && r<.5){
+						typeToMake = RobotType.LUMBERJACK;
+					}
 				}
 				try{
 					if(rc.getTeamBullets() >= amntToWaitFor) {
-						if(tryToPlant()) {
-							amntToWaitFor = Short.MAX_VALUE;
-							numTreesPlanted++;
+						if(typeToMake == null){
+							if(tryToPlant()) {
+								amntToWaitFor = Short.MAX_VALUE;
+								numTreesPlanted++;
+							}
 						}
-						if(tryToBuild(RobotType.SOLDIER)) {
-							amntToWaitFor = Short.MAX_VALUE;
-
+						if(typeToMake == RobotType.SOLDIER){
+							if(tryToBuild(typeToMake)) {
+								amntToWaitFor = Short.MAX_VALUE;
+							}
+						}
+						if(typeToMake == RobotType.LUMBERJACK){
+							if(tryToBuild(typeToMake)){
+								amntToWaitFor = Short.MAX_VALUE;
+							}
 						}
 					}
 					tryToWater();
