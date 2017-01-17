@@ -179,7 +179,6 @@ public strictfp class RobotPlayer {
 				}
 				//Done:
 				Clock.yield(); 
-<<<<<<< HEAD
 				}
 				else { //regular gardener:
 					try {
@@ -240,43 +239,6 @@ public strictfp class RobotPlayer {
 
 							//if(amntToWaitFor == Short.MAX_VALUE)
 							//	typeToMake=null;
-=======
-			}
-		}
-		else {
-			int numTreesPlanted = 0;
-			String type = "TREE";
-			while(true){
-				if(amntToWaitFor == Short.MAX_VALUE) {
-					amntToWaitFor = (short) GameConstants.BULLET_TREE_COST;
-					double r = Math.random();
-					type = "TREE";
-					if (numTreesPlanted > 3){
-						if (r < .3){
-							amntToWaitFor = (short) RobotType.SOLDIER.bulletCost;
-							type = "SOLDIER";
-						}
-						else if (r < .5){
-							amntToWaitFor = (short) RobotType.LUMBERJACK.bulletCost;
-							type = "LUMBERJACK";
-						}
-					}
-				}
-				try{
-					if(rc.getTeamBullets() >= amntToWaitFor) {
-						if(type.equals("TREE") && tryToPlant()) {
-							amntToWaitFor = Short.MAX_VALUE;
-							numTreesPlanted++;
-						}
-						if(type.equals("SOLDIER") && tryToBuild(RobotType.SOLDIER)) {
-							amntToWaitFor = Short.MAX_VALUE;
-						}
-						if(type.equals("LUMBERJACK") && tryToBuild(RobotType.LUMBERJACK)){
-							amntToWaitFor = Short.MAX_VALUE;
-<<<<<<< HEAD
->>>>>>> 03c18dbb70b6bc9b9b5c844743b7ce24be4f2574
-=======
->>>>>>> 03c18dbb70b6bc9b9b5c844743b7ce24be4f2574
 						}
 					} catch(GameActionException e){
 						e.printStackTrace();
