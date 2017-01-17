@@ -138,35 +138,34 @@ public strictfp class RobotPlayer {
 		}
 		else {
 			int numTreesPlanted = 0;
-			RobotType typeToMake = null;
+			String type = "TREE";
 			while(true){
 				if(amntToWaitFor == Short.MAX_VALUE) {
-					amntToWaitFor = (short) RobotType.SOLDIER.bulletCost;
+					amntToWaitFor = (short) GameConstants.BULLET_TREE_COST;
 					double r = Math.random();
-					if(r < .30){
-						typeToMake = RobotType.SOLDIER;
-					}
-					else if (r>.3 && r<.5){
-						typeToMake = RobotType.LUMBERJACK;
+					type = "TREE";
+					if (numTreesPlanted > 3){
+						if (r < .3){
+							amntToWaitFor = (short) RobotType.SOLDIER.bulletCost;
+							type = "SOLDIER";
+						}
+						else if (r < .5){
+							amntToWaitFor = (short) RobotType.LUMBERJACK.bulletCost;
+							type = "LUMBERJACK";
+						}
 					}
 				}
 				try{
 					if(rc.getTeamBullets() >= amntToWaitFor) {
-						if(typeToMake == null){
-							if(tryToPlant()) {
-								amntToWaitFor = Short.MAX_VALUE;
-								numTreesPlanted++;
-							}
+						if(type.equals("TREE") && tryToPlant()) {
+							amntToWaitFor = Short.MAX_VALUE;
+							numTreesPlanted++;
 						}
-						if(typeToMake == RobotType.SOLDIER){
-							if(tryToBuild(typeToMake)) {
-								amntToWaitFor = Short.MAX_VALUE;
-							}
+						if(type.equals("SOLDIER") && tryToBuild(RobotType.SOLDIER)) {
+							amntToWaitFor = Short.MAX_VALUE;
 						}
-						if(typeToMake == RobotType.LUMBERJACK){
-							if(tryToBuild(typeToMake)){
-								amntToWaitFor = Short.MAX_VALUE;
-							}
+						if(type.equals("LUMBERJACK") && tryToBuild(RobotType.LUMBERJACK)){
+							amntToWaitFor = Short.MAX_VALUE;
 						}
 					}
 					tryToWater();

@@ -45,6 +45,9 @@ public strictfp class RobotPlayer {
     public static void runArchon() {
         while(true){
             try{
+            	if(rc.getTeamBullets()>=10000){
+            		rc.donate(rc.getTeamBullets());
+            	}
                 //TODO count gardeners
                 //try to build gardeners
                 //can you build a gardener?
