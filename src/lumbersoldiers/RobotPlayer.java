@@ -16,6 +16,9 @@ public strictfp class RobotPlayer {
 	static Direction[] gridDirectionList = new Direction[4];
 	static Direction goingDir;
 	static Random rand;
+	
+	static final int MAX_GARDENERS = 6;
+	static final int MAX_LJ = 8;
 	@SuppressWarnings("unused")
 	public static void run(RobotController rc) throws GameActionException {
 		RobotPlayer.rc = rc;
@@ -51,12 +54,10 @@ public strictfp class RobotPlayer {
 		}
 	}
 	public static void runArchon() {
-		byte numGardenersCreated = 0;
-		byte minNumGardeners = 5;
-		byte timer = 0;
 		while(true){
 			float currentBank = rc.getTeamBullets();
 			try{
+				Direction dir = randomDirection();
 				if(currentBank >= 10000)
 					rc.donate(10000);
 
@@ -67,18 +68,19 @@ public strictfp class RobotPlayer {
 
 				//Gardener logic:
 				//Try to create a gardener at the next opportunity if there aren't enough alive
-				if(rc.isBuildReady()) {
-					byte[] gardenerStateBytes = toBytes(rc.readBroadcast(CHANNEL_G));
-					if(numGardenersCreated < minNumGardeners || 
-							gardenerStateBytes[3] < minNumGardeners || 
-							(currentBank >= 300 && Math.random() < .15)) { //added additional slower creation of gardeners as game may progress
-						if(tryToBuild(RobotType.GARDENER)) { //builds robot if it can
-							numGardenersCreated++;
-							gardenerStateBytes[3] =  (byte) (gardenerStateBytes[3] + 1);
-							rc.broadcast(CHANNEL_G, toInt(gardenerStateBytes));
-						}
-					}
+				rc.broadcast(CHANNEL_G, 0);
+				int prevGardeners = rc.readBroadcast(CHANNEL_G);
+				if(rc.isBuildReady() && prevGardeners < MAX_GARDENERS) {
+					rc.hireGardener(dir);
+					rc.broadcast(CHANNEL_G, prevGardeners+1);
 				}
+				goingDir = randomDirection();
+            	while(!rc.canMove(goingDir)){
+            		goingDir = goingDir.rotateRightRads(TWO_PI/6);
+            	}
+            	while(rc.canMove(goingDir)){
+            		rc.move(goingDir);
+            	}
 				//System.out.println("bytecode usage is "+Clock.getBytecodeNum());
 				Clock.yield();
 			}catch(Exception e){
@@ -87,209 +89,39 @@ public strictfp class RobotPlayer {
 		}
 	}
 	public static void runGardener(){
-		short amntToWaitFor = Short.MAX_VALUE; //unset
-		int comm = getCommunicationGardener();
-		int numGardeners = 1;
-
-		int numTreesPlanted = 0;
-		RobotType typeToMake = null;
-
-		while(true) {
-			try {
-				if(rc.getID() == comm) {
-					////////Monitor Health Lead Gardener\\\\\\\
-					float health = rc.getHealth();
-
-					if(health <= 0.10 * RobotType.GARDENER.maxHealth) {
-						BulletInfo[] nearbyBullets = rc.senseNearbyBullets(3);
-						float maxDamageTotal = 0;
-						for(BulletInfo bi : nearbyBullets)
-							maxDamageTotal += bi.damage;
-
-						//uncomment the following to probably save on bytecode
-						//if(health <= 0.10 * RobotType.GARDENER.maxHealth && nearbyBullets.length > 0) {
-						if(health <= maxDamageTotal) { //about to die
-							//first try to make a nearby gardener into the lead gardener:
-							RobotInfo[] nearbyRobots = rc.senseNearbyRobots(-1, rc.getTeam());
-							for(RobotInfo ri : nearbyRobots) {
-								if(ri.getType().equals(RobotType.GARDENER)) {
-									try {
-										rc.broadcast(CHANNEL_COMG, ri.getID());
-										comm = 0;
-										break;
-									} catch (GameActionException e) {
-										e.printStackTrace();
-									}
-								}
-							}
-							if(comm != 0) {
-								//couldn't find a nearby gardener; next one that asks is lead
-								try {
-									rc.broadcast(CHANNEL_COMG, 0);
-								} catch (GameActionException e) {
-									e.printStackTrace();
-								}
-							}
-						}
-					}
-					////////\\\\\\\
-
-					////////Scout Production (Lead Gardener) \\\\\\\
-					//If need more scouts and not busy, make a scout:
-					if(amntToWaitFor == Short.MAX_VALUE) {
-						byte[] scoutChannelData;
-						try {
-							scoutChannelData = toBytes(rc.readBroadcast(CHANNEL_SCOUT));
-							if( scoutChannelData[3] > 0) {
-								amntToWaitFor = (short) RobotType.SCOUT.bulletCost;
-								scoutChannelData[3]--;
-								rc.broadcast(CHANNEL_SCOUT, toInt(scoutChannelData));
-							}
-						} catch (GameActionException e) {
-							e.printStackTrace();
-						}
-					}
-					else if(rc.getTeamBullets() >= amntToWaitFor) {
-						if(tryToBuild(RobotType.SCOUT)) {
-							amntToWaitFor = Short.MAX_VALUE;
-						}
-					}
-					////////\\\\\\\
-					else {
-						//TODO: Check if scouts have said where other gardeners are:
-						try {
-							TreeInfo[]nearbyTrees = rc.senseNearbyTrees();
-							tryToWater(nearbyTrees);
-	
-							//move closer to neighboring robots if possible
-							RobotInfo[] nearbyRobots = rc.senseNearbyRobots(-1, rc.getTeam());
-							if(nearbyRobots.length >= 2) { //more than archon 
-								float avgX = nearbyRobots[0].getLocation().x;
-								float avgY = nearbyRobots[0].getLocation().y;
-								for(int i = 1; i < 10; i++)  {
-									avgX+= nearbyRobots[i].getLocation().x;
-									avgY+= nearbyRobots[i].getLocation().y;
-								}
-								avgX = avgX / nearbyRobots.length;
-								avgY = avgY / nearbyRobots.length;
-								tryMove(rc.getLocation().directionTo(new MapLocation(avgX, avgY)));
-							}
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-					}
-					//Done:
-					Clock.yield(); 
-				}
-				else { //regular gardener:
-					try {
-						numGardeners = rc.readBroadcast(CHANNEL_G);
-					} catch (GameActionException e1) {System.out.println(e1.getMessage());}
-
-					//If about to die, broadcast:
-					try {
-						float health = rc.getHealth();
-						if(health <= 0.10 * rc.getType().maxHealth) {
-							BulletInfo[] nearbyBullets = rc.senseNearbyBullets(3);
-							float maxDamageTotal = 0;
-							for(BulletInfo bi : nearbyBullets)
-								maxDamageTotal += bi.damage;
-
-							if(health <= maxDamageTotal) {
-								sendDistress();
-							}
-						}
-					} catch(Exception e) {
-						System.out.println("monitoring exception " + e.getMessage());
-					}
-
-					try {
-						//assign new goal if none:
-						if(amntToWaitFor == Short.MAX_VALUE) {
-							double r = Math.random();
-							if(r < .2){
-								typeToMake = RobotType.SOLDIER;
-								amntToWaitFor = (short) RobotType.SOLDIER.bulletCost;
-							}
-							else if (r>=.2 && r<.4){
-								typeToMake = RobotType.LUMBERJACK;
-								amntToWaitFor = (short) RobotType.LUMBERJACK.bulletCost;
-							}
-							else {
-								typeToMake = null;
-								amntToWaitFor = (short) GameConstants.BULLET_TREE_COST;
-							}
-						}
-					}catch(Exception e) {
-						System.out.println("gaol assignment exception " + e.getMessage());
-					}
-
-					//check goal met:
-					try{
-						if(rc.getTeamBullets() >= amntToWaitFor) {
-							if(typeToMake == null){
-								if(tryToPlant()) {
-									amntToWaitFor = Short.MAX_VALUE;
-									numTreesPlanted++;
-								}
-							}
-							else if(tryToBuild(typeToMake)) {
-								amntToWaitFor = Short.MAX_VALUE;
-								typeToMake = null;
-							}
-
-							//if(amntToWaitFor == Short.MAX_VALUE)
-							//	typeToMake=null;
-						}
-					} catch(GameActionException e){
-						e.printStackTrace();
-					} catch(NullPointerException e) {
-						//e.printStackTrace();
-						System.out.println("goal met exception " + e.getMessage());
-					}
-
-					try {
-						TreeInfo[]nearbyTrees = rc.senseNearbyTrees();
-						tryToWater(nearbyTrees);
-						
-						// If any nearby trees have less than half health, don't move and keep watering
-						for (TreeInfo t : nearbyTrees){
-							if (t.health <= t.maxHealth/2){
-								Clock.yield();
-							}
-						}
-						
-						Direction randDirection = getRandomDirTargeted((short) rc.getLocation().directionTo(
-								rc.getInitialArchonLocations(rc.getTeam().opponent())[0]).getAngleDegrees(), (short) 55);
-						if(rc.canMove(randDirection)){ //try to move away from archon 
-							if(tryMove(randDirection))
-								Clock.yield();
-						} 
-						else if(Math.random() < .75) { //try a different random 
-							if(tryMove(randomDirection()))
-								Clock.yield();
-						}
-					} catch(GameActionException e){
-						e.printStackTrace();
-					} catch(NullPointerException e) {
-						//e.printStackTrace();
-						System.out.println("move & water exception " + e.getMessage());
-					}
-
-					//Done:
-					try {
-						Clock.yield();
-					} catch(NullPointerException e) {
-						//e.printStackTrace();
-						System.out.println("clock" + e.getMessage());
-					}
-				}
-			}
-			catch(NullPointerException e) {
-				System.out.println(e.getMessage());
-			}
-		}
-	}
+        while(true){
+        	int round = rc.getRobotCount();
+            try{
+            	int prev = rc.readBroadcast(CHANNEL_G);
+            	rc.broadcast(CHANNEL_G, prev+1);
+                if (round > 200){
+                	tryToPlant();
+                	tryToWater();
+                	if (rc.canBuildRobot(RobotType.SCOUT, Direction.getEast()) && rc.getTeamBullets() > 200){
+                		rc.buildRobot(RobotType.SCOUT, Direction.getEast());
+                	}
+                	else if (rc.canBuildRobot(RobotType.SOLDIER, Direction.getEast())){
+                		rc.buildRobot(RobotType.SOLDIER, Direction.getEast());
+                	}
+                	else if (rc.canBuildRobot(RobotType.LUMBERJACK, Direction.getEast())){
+                		rc.buildRobot(RobotType.LUMBERJACK, Direction.getEast());
+                	}
+                }
+                else {
+                	goingDir = randomDirection();
+                	while(!rc.canMove(goingDir)){
+                		goingDir = goingDir.rotateRightRads(TWO_PI/6);
+                	}
+                	while(rc.canMove(goingDir)){
+                		rc.move(goingDir);
+                	}
+                }
+                Clock.yield();
+            }catch(Exception e){
+                e.printStackTrace();
+            }
+        }
+    }
 
 	static void runScout() {
 		TreeInfo currentTree = null;
@@ -301,6 +133,13 @@ public strictfp class RobotPlayer {
 			TreeInfo[] nearbyTrees = rc.senseNearbyTrees(-1, Team.NEUTRAL);
 			TreeInfo bestTree = null;
 			for(TreeInfo ti : nearbyTrees) { //get biggest tree
+				if(rc.canShake(ti.ID)){
+					try {
+						rc.shake(ti.ID);
+					} catch (GameActionException e) {
+						e.printStackTrace();
+					}
+				}
 				if(ti.getRadius() > bestTree.getRadius())
 					bestTree = ti;
 			}
@@ -406,58 +245,45 @@ public strictfp class RobotPlayer {
 		MapLocation myLocation = rc.getLocation();
 		// The code you want your robot to perform every round should be in this loop
 		while (true) {
-
-			// Try/catch blocks stop unhandled exceptions, which cause your robot to explode
-			try {
-
-				// See if there are any enemy robots within striking range (distance 1 from lumberjack's radius)
-				RobotInfo[] robots = rc.senseNearbyRobots(-1, enemy);
-				ArrayList<RobotInfo> inStrikingRange = new ArrayList<RobotInfo>();
-				float strikingRange = RobotType.LUMBERJACK.bodyRadius+GameConstants.LUMBERJACK_STRIKE_RADIUS;
-				for(RobotInfo rob : robots){
-					if(myLocation.isWithinDistance(rob.location, strikingRange)){
-						inStrikingRange.add(rob);
-					}
-				}
-				
-				//look for nearby trees that are not ours to chop
-				TreeInfo[] nearbyTrees = rc.senseNearbyTrees(strikingRange);
-				for(TreeInfo tree : nearbyTrees){
-					if(!tree.team.equals(myTeam)){
-						if(rc.canChop(tree.ID))
-							rc.chop(tree.ID);
-							break;
-					}
-				}
-				
-
-				if(inStrikingRange.size() > 0 && !rc.hasAttacked()) {
-					// Use strike() to hit all nearby robots and move towards one
-					rc.strike();
-					tryMove(myLocation.directionTo(inStrikingRange.get(0).getLocation()));
-				} else {
-					// If there is a robot in sight, move towards it
-					if(robots.length > 0) {
-						
-						MapLocation enemyLocation = robots[0].getLocation();
-						Direction toEnemy = myLocation.directionTo(enemyLocation);
-
-						tryMove(toEnemy);
-					} else {
-						// Move Randomly
-						tryMove(randomDirection());
-					}
-				}
-
-				// Clock.yield() makes the robot wait until the next turn, then it will perform this loop again
-				Clock.yield();
-
-			} catch (Exception e) {
-				System.out.println("Lumberjack Exception");
-				e.printStackTrace();
-			}
-		}
+            try {
+                RobotInfo[] bots = rc.senseNearbyRobots();
+                for (RobotInfo b : bots) {
+                    if (b.getTeam() != rc.getTeam() && rc.canStrike()) {
+                        rc.strike();
+                        Direction chase = rc.getLocation().directionTo(b.getLocation());
+                        if (rc.canMove(chase)) {
+                            rc.move(chase);
+                        }
+                        break;
+                    }
+                }
+                TreeInfo[] trees = rc.senseNearbyTrees();
+                for (TreeInfo t : trees) {
+                    if (rc.canChop(t.getLocation())) {
+                        rc.chop(t.getLocation());
+                        break;
+                    }
+                }
+                if (! rc.hasAttacked()) {
+                    wander();
+                }
+                Clock.yield();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
 	}
+	
+	public static void wander() throws GameActionException {
+        try {
+            Direction dir = randomDirection();
+            if (rc.canMove(dir)) {
+                rc.move(dir);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
 	static boolean sendDistress() {
 		System.out.println("distress");
@@ -634,26 +460,34 @@ public strictfp class RobotPlayer {
 	}
 
 	public static boolean tryToPlant() throws GameActionException{
-		//try to build gardeners
-		//can you build a gardener?
+		boolean planted = false;
+		//plant 5 trees and leave a hole open facing east to spawn soldiers and lumberjacks and scouts
 		if(rc.hasTreeBuildRequirements()) {
-			for (int i = 0; i < 4; i++) {
-				//only plant trees on a sub-grid
-				MapLocation p = rc.getLocation().add(gridDirectionList[i],GameConstants.GENERAL_SPAWN_OFFSET+GameConstants.BULLET_TREE_RADIUS+rc.getType().bodyRadius);
-				if(modGood(p.x,6,0.2f)&&modGood(p.y,6,0.2f)) {
-					if (rc.canPlantTree(gridDirectionList[i])) {
-						rc.plantTree(gridDirectionList[i]);
-						System.out.println("planted");
-						return true;
-					}
+			for (int i = 1; i < 6; i++) {
+				float mod = 60*i;
+				//only plant trees in a circle around location
+				Direction dir = Direction.getEast().rotateRightDegrees(mod);
+				if (rc.canPlantTree(dir)){
+					rc.plantTree(dir);
+					planted = true;
 				}
 			}
 		}
 		return false;
 	}
-	public static boolean modGood(float number,float spacing, float fraction){
-		return (number%spacing)<spacing*fraction;
-	}
+	
+	public static void tryToWater() throws GameActionException{
+        if(rc.canWater()) {
+            TreeInfo[] nearbyTrees = rc.senseNearbyTrees();
+            for (int i = 0; i < nearbyTrees.length; i++)
+                if(nearbyTrees[i].getHealth()<GameConstants.BULLET_TREE_MAX_HEALTH-GameConstants.WATER_HEALTH_REGEN_RATE) {
+                    if (rc.canWater(nearbyTrees[i].getID())) {
+                        rc.water(nearbyTrees[i].getID());
+                        break;
+                    }
+                }
+        }
+    }
 
 	public static byte[] toBytes(int i) {
 		byte[] result = new byte[4];

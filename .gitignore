@@ -5,3 +5,4 @@ matches/
 *.DS_STORE
 *.classpath
 /.gradle/
+/build/
