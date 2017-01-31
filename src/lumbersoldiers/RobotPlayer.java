@@ -54,6 +54,7 @@ public strictfp class RobotPlayer {
 		}
 	}
 	public static void runArchon() {
+		int spawnedGardeners = 0;
 		while(true){
 			float currentBank = rc.getTeamBullets();
 			try{
@@ -68,19 +69,15 @@ public strictfp class RobotPlayer {
 
 				//Gardener logic:
 				//Try to create a gardener at the next opportunity if there aren't enough alive
-				rc.broadcast(CHANNEL_G, 0);
-				int prevGardeners = rc.readBroadcast(CHANNEL_G);
-				if(rc.isBuildReady() && prevGardeners < MAX_GARDENERS) {
+				if(rc.isBuildReady() && spawnedGardeners < MAX_GARDENERS) {
 					rc.hireGardener(dir);
-					rc.broadcast(CHANNEL_G, prevGardeners+1);
+					spawnedGardeners++;
 				}
 				goingDir = randomDirection();
             	while(!rc.canMove(goingDir)){
             		goingDir = goingDir.rotateRightRads(TWO_PI/6);
             	}
-            	while(rc.canMove(goingDir)){
-            		rc.move(goingDir);
-            	}
+            	rc.move(goingDir);
 				//System.out.println("bytecode usage is "+Clock.getBytecodeNum());
 				Clock.yield();
 			}catch(Exception e){
@@ -89,12 +86,13 @@ public strictfp class RobotPlayer {
 		}
 	}
 	public static void runGardener(){
+		int spawnRound = rc.getRoundNum();
         while(true){
-        	int round = rc.getRobotCount();
+        	int round = rc.getRoundNum();
             try{
             	int prev = rc.readBroadcast(CHANNEL_G);
             	rc.broadcast(CHANNEL_G, prev+1);
-                if (round > 200){
+                if ((round-spawnRound) > 100){
                 	tryToPlant();
                 	tryToWater();
                 	if (rc.canBuildRobot(RobotType.SCOUT, Direction.getEast()) && rc.getTeamBullets() > 200){
@@ -112,9 +110,7 @@ public strictfp class RobotPlayer {
                 	while(!rc.canMove(goingDir)){
                 		goingDir = goingDir.rotateRightRads(TWO_PI/6);
                 	}
-                	while(rc.canMove(goingDir)){
-                		rc.move(goingDir);
-                	}
+                	rc.move(goingDir);
                 }
                 Clock.yield();
             }catch(Exception e){
