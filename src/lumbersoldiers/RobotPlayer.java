@@ -15,9 +15,9 @@ public strictfp class RobotPlayer {
 	static RobotController rc;
 	static Direction[] gridDirectionList = new Direction[4];
 	static Direction goingDir;
-	static Random rand;
+	static Random rand = new Random();
 	
-	static final int MAX_GARDENERS = 6;
+	static final int MAX_GARDENERS = 4;
 	static final int MAX_LJ = 8;
 	@SuppressWarnings("unused")
 	public static void run(RobotController rc) throws GameActionException {
@@ -55,12 +55,13 @@ public strictfp class RobotPlayer {
 	}
 	public static void runArchon() {
 		int spawnedGardeners = 0;
+		int round = rc.getRoundNum();
 		while(true){
 			float currentBank = rc.getTeamBullets();
 			try{
 				Direction dir = randomDirection();
-				if(currentBank >= 10000)
-					rc.donate(10000);
+				if(currentBank >= (7500 +(round*(12.5/3))))
+					rc.donate(currentBank);
 
 				//Broadcast Logic:
 				//Broadcast only after generating X reads/writes's to the team array, 
@@ -86,26 +87,46 @@ public strictfp class RobotPlayer {
 		}
 	}
 	public static void runGardener(){
+		int maxSoldiers = 4;
+		int maxLumbers = 2;
+		int maxScouts = 2;
+		int soldiers = 0, lumbers = 0, scouts = 0;
+		
 		int spawnRound = rc.getRoundNum();
         while(true){
         	int round = rc.getRoundNum();
+        	int n = rand.nextInt(50);
+        	Direction east = Direction.getEast();
+        	boolean startedCultivating = false;
+        	float currentBank = rc.getTeamBullets();
             try{
-            	int prev = rc.readBroadcast(CHANNEL_G);
-            	rc.broadcast(CHANNEL_G, prev+1);
-                if ((round-spawnRound) > 100){
-                	tryToPlant();
+            	if(currentBank >= (7500 +(round*(12.5/3))))
+					rc.donate(currentBank);
+            	RobotInfo[] teammatesNear = rc.senseNearbyRobots((float) 4.0, rc.getTeam());
+                if (((round-spawnRound) > 50 && teammatesNear.length < 2) || startedCultivating){
                 	tryToWater();
-                	if (rc.canBuildRobot(RobotType.SCOUT, Direction.getEast()) && rc.getTeamBullets() > 200){
-                		rc.buildRobot(RobotType.SCOUT, Direction.getEast());
+                	tryToPlant();
+                	startedCultivating = true;
+                	//make scouts first
+                	/*if (rc.canBuildRobot(RobotType.SCOUT, east)  && scouts < maxScouts){
+                		rc.buildRobot(RobotType.SCOUT, east);
+                		scouts ++;
                 	}
-                	else if (rc.canBuildRobot(RobotType.SOLDIER, Direction.getEast())){
-                		rc.buildRobot(RobotType.SOLDIER, Direction.getEast());
+                	//randomly make soldier or lumberjack
+                	else if (rc.canBuildRobot(RobotType.SOLDIER, east) && soldiers < maxSoldiers && n > 20){
+                		rc.buildRobot(RobotType.SOLDIER, east);
+                		soldiers ++;
                 	}
-                	else if (rc.canBuildRobot(RobotType.LUMBERJACK, Direction.getEast())){
-                		rc.buildRobot(RobotType.LUMBERJACK, Direction.getEast());
+                	else if (rc.canBuildRobot(RobotType.LUMBERJACK, east) && lumbers < maxLumbers){
+                		rc.buildRobot(RobotType.LUMBERJACK, east);
+                		lumbers ++;
+                	}*/
+                	// If cant make any other robots, just plant a tree east and keep farming
+                	if (rc.canPlantTree(east)){
+                		rc.plantTree(east);
                 	}
                 }
-                else {
+                else if (!startedCultivating) {
                 	goingDir = randomDirection();
                 	while(!rc.canMove(goingDir)){
                 		goingDir = goingDir.rotateRightRads(TWO_PI/6);
@@ -123,27 +144,26 @@ public strictfp class RobotPlayer {
 		TreeInfo currentTree = null;
 		Direction lastMovedDirection = randomDirection();
 		while(true) {
-			MapLocation currentLoc = rc.getLocation();
-
-			//Hide on large neutral trees if in sight
-			TreeInfo[] nearbyTrees = rc.senseNearbyTrees(-1, Team.NEUTRAL);
-			TreeInfo bestTree = null;
-			for(TreeInfo ti : nearbyTrees) { //get biggest tree
-				if(rc.canShake(ti.ID)){
-					try {
-						rc.shake(ti.ID);
-					} catch (GameActionException e) {
-						e.printStackTrace();
-					}
-				}
-				if(ti.getRadius() > bestTree.getRadius())
-					bestTree = ti;
-			}
-			if(bestTree.getRadius() > RobotType.SCOUT.bodyRadius+2) { //big tree found
-				currentTree = bestTree;
-			}
-
 			try {
+				MapLocation currentLoc = rc.getLocation();
+
+				//Hide on large neutral trees if in sight
+				TreeInfo[] nearbyTrees = rc.senseNearbyTrees(-1, Team.NEUTRAL);
+				TreeInfo bestTree = null;
+				for(TreeInfo ti : nearbyTrees) { //get biggest tree
+					/*if(rc.canShake(ti.ID)){
+						try {
+							rc.shake(ti.ID);
+						} catch (GameActionException e) {
+							e.printStackTrace();
+						}
+					}*/
+					if(ti.getRadius() > bestTree.getRadius())
+						bestTree = ti;
+				}
+				if(bestTree.getRadius() > RobotType.SCOUT.bodyRadius+2) { //big tree found
+					currentTree = bestTree;
+				}
 				//Move towards tree if need to:
 				if(currentTree != null && !rc.isCircleOccupiedExceptByThisRobot(currentLoc, currentTree.getRadius()-0.1f)) {
 					tryMove(currentLoc.directionTo(currentTree.getLocation()));
@@ -151,14 +171,12 @@ public strictfp class RobotPlayer {
 				else if(currentTree == null) {
 					tryMove(getRandomDirTargeted((short) lastMovedDirection.getAngleDegrees(), (short) 30));
 				}
+				//TODO: save Map locations seen
+				Clock.yield();
 			} catch (GameActionException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-
-
-			//TODO: save Map locations seen
-			Clock.yield();
 		}
 	}
 
@@ -244,7 +262,7 @@ public strictfp class RobotPlayer {
             try {
                 RobotInfo[] bots = rc.senseNearbyRobots();
                 for (RobotInfo b : bots) {
-                    if (b.getTeam() != rc.getTeam() && rc.canStrike()) {
+                    if (b.getTeam() == enemy && rc.canStrike()) {
                         rc.strike();
                         Direction chase = rc.getLocation().directionTo(b.getLocation());
                         if (rc.canMove(chase)) {
@@ -255,12 +273,15 @@ public strictfp class RobotPlayer {
                 }
                 TreeInfo[] trees = rc.senseNearbyTrees();
                 for (TreeInfo t : trees) {
-                    if (rc.canChop(t.getLocation())) {
+                    if (t.team != myTeam && rc.canChop(t.getLocation())) {
                         rc.chop(t.getLocation());
                         break;
                     }
+                    if (! rc.hasMoved()){
+                    	rc.move(t.getLocation());
+                    }
                 }
-                if (! rc.hasAttacked()) {
+                if (! rc.hasAttacked() && ! rc.hasMoved()) {
                     wander();
                 }
                 Clock.yield();
@@ -413,7 +434,7 @@ public strictfp class RobotPlayer {
 			float weakestTreeHealth = GameConstants.BULLET_TREE_MAX_HEALTH;
 			if(nearbyTrees.length > 0)  {
 				for(TreeInfo ti : nearbyTrees) {
-					if(rc.canWater(ti.getID())) {
+					if(rc.canWater(ti.getID())&&ti.health < (GameConstants.BULLET_TREE_MAX_HEALTH - GameConstants.WATER_HEALTH_REGEN_RATE)) {
 						ans++;
 						if(ti.getHealth() < weakestTreeHealth) {
 							weakestTreeID = ti.getID();
